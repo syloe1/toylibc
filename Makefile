@@ -31,7 +31,7 @@ LIB_OBJS := $(BUILD_DIR)/syscall.o \
             $(BUILD_DIR)/heap.o    \
             $(BUILD_DIR)/stdio.o
 
-.PHONY: all clean test
+.PHONY: all clean test examples
 
 all: $(LIB) $(TEST_BIN)
 
@@ -72,6 +72,13 @@ test: $(TEST_BIN)
 	$(TEST_BIN)
 	@echo ""
 	@echo ">>> exit code: $$?"
+
+# ---- 示例程序 ----
+examples: $(LIB)
+	@mkdir -p $(BUILD_DIR)
+	$(CC) -I include $(CFLAGS) -nostartfiles -nodefaultlibs -static \
+	      $(BUILD_DIR)/start.o examples/hello.c $(LIB) -o $(BUILD_DIR)/hello
+	@echo "  → build/hello (编译完成)"
 
 clean:
 	rm -rf $(BUILD_DIR)
