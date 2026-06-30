@@ -1,7 +1,7 @@
 /**
- * string.c — strlen / memcpy / memset 纯用户态实现
+ * string.c — strlen / memcpy / memset / memcmp / memmove / strcmp / strcpy
  *
- * 这三个函数不依赖任何系统调用，完全在用户态执行。
+ * 全部纯用户态实现，不依赖任何系统调用。
  * 复杂度为 O(n)，不做 SIMD 优化，追求代码简洁可读。
  */
 
@@ -9,10 +9,6 @@
 
 // =========================================================================
 // toylibc_strlen — 计算字符串长度（不含 '\0'）
-//
-// 逐字节扫描直到遇到 '\0'。
-// 极简实现，没有像 glibc 那样按 word 对齐后一次比较 8 字节
-// （那是为了性能；这里为了教学清晰度）。
 // =========================================================================
 unsigned long toylibc_strlen(const char *s)
 {
@@ -25,15 +21,7 @@ unsigned long toylibc_strlen(const char *s)
 }
 
 // =========================================================================
-// toylibc_memcpy — 逐字节复制内存
-//
-// 前提：dest 和 src 不能重叠（overlap）。
-//      若需要处理重叠，应使用 memmove。
-//
-// 为何不用 word 复制？
-//   - 字节复制对所有对齐都正确
-//   - 编译器可能自动向量化（-O2 时）
-//   - 保持代码最小、最易懂
+// toylibc_memcpy — 逐字节复制内存（dest 和 src 不能重叠）
 // =========================================================================
 void *toylibc_memcpy(void *dest, const void *src, unsigned long n)
 {
@@ -47,9 +35,34 @@ void *toylibc_memcpy(void *dest, const void *src, unsigned long n)
 }
 
 // =========================================================================
-// toylibc_memset — 用常量字节填充内存
+// toylibc_memmove — 安全复制，允许 dest 和 src 重叠
 //
-// c 被转换为 unsigned char（取低 8 位），然后逐字节写入 dest。
+// 与 memcpy 的区别:
+//   memcpy 假设 dest 和 src 不重叠（UB 如果重叠）
+//   memmove 先判方向：src < dest 时从后往前复制，保证正确性
+// =========================================================================
+void *toylibc_memmove(void *dest, const void *src, unsigned long n)
+{
+    unsigned char       *d = (unsigned char *)dest;
+    const unsigned char *s = (const unsigned char *)src;
+
+    if (d < s) {
+        // 源在目标之后 → 从头复制
+        for (unsigned long i = 0; i < n; i++) {
+            d[i] = s[i];
+        }
+    } else if (d > s) {
+        // 源在目标之前 → 从尾复制（防止覆盖还未读取的源数据）
+        for (unsigned long i = n; i > 0; i--) {
+            d[i - 1] = s[i - 1];
+        }
+    }
+    // d == s: 无需复制
+    return dest;
+}
+
+// =========================================================================
+// toylibc_memset — 用常量字节填充内存
 // =========================================================================
 void *toylibc_memset(void *dest, int c, unsigned long n)
 {
@@ -77,4 +90,38 @@ int toylibc_memcmp(const void *a, const void *b, unsigned long n)
         }
     }
     return 0;
+}
+
+// =========================================================================
+// toylibc_strcmp — 逐字节比较字符串
+//
+// 返回: 0 = 相等, <0 = a < b, >0 = a > b
+// =========================================================================
+int toylibc_strcmp(const char *a, const char *b)
+{
+    while (*a != '\0' && *b != '\0') {
+        if (*a != *b) {
+            return (int)(unsigned char)*a - (int)(unsigned char)*b;
+        }
+        a++;
+        b++;
+    }
+    return (int)(unsigned char)*a - (int)(unsigned char)*b;
+}
+
+// =========================================================================
+// toylibc_strcpy — 复制字符串（包含 '\0'）
+//
+// 返回 dest 指针。调用者保证 dest 足够大。
+// =========================================================================
+char *toylibc_strcpy(char *dest, const char *src)
+{
+    char *d = dest;
+    while (*src != '\0') {
+        *d = *src;
+        d++;
+        src++;
+    }
+    *d = '\0';
+    return dest;
 }

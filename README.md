@@ -143,8 +143,8 @@ make clean    # 清理产物
 ★★★★☆ libc          — 已完成（自举运行时库，13 个函数）
 ★★★★★ ELF           — 已完成（learn-elf.md）
 ★★★★★ Loader        — 已完成（learn-loader.md）
-☆☆☆☆☆ 动态链接       ← 进行中（learn-dynlink.md）
-☆☆☆☆☆ POSIX
+★★★★☆ 动态链接       — 已完成（learn-dynlink.md）
+☆☆☆☆☆ POSIX         ← 进行中
 ☆☆☆☆☆ Shell
 ```
 

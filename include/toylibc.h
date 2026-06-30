@@ -19,14 +19,86 @@ extern "C" {
 #define TOY_MAP_FIXED     0x10
 #define TOY_MAP_ANONYMOUS 0x20
 
+// ---- open 标志 ----
+#define TOY_O_RDONLY    0
+#define TOY_O_WRONLY    1
+#define TOY_O_RDWR      2
+#define TOY_O_CREAT     0100
+#define TOY_O_TRUNC     01000
+#define TOY_O_APPEND    02000
+
+// ---- lseek whence ----
+#define TOY_SEEK_SET  0
+#define TOY_SEEK_CUR  1
+#define TOY_SEEK_END  2
+
+// ---- 信号常量 ----
+#define TOY_SIGINT   2
+#define TOY_SIGKILL  9
+#define TOY_SIGTERM  15
+#define TOY_SIGCHLD  17
+#define TOY_SIG_DFL  ((void *)0)
+#define TOY_SIG_IGN  ((void *)1)
+#define TOY_SA_RESTORER  0x04000000
+
+// ---- waitpid 选项 ----
+#define TOY_WNOHANG  1
+
+// ---- POSIX 结构体 ----
+struct toylibc_timespec {
+    long tv_sec;
+    long tv_nsec;
+};
+
+struct toylibc_timeval {
+    long tv_sec;
+    long tv_usec;
+};
+
+// 简化版 stat 结构 (x86_64)
+struct toylibc_stat {
+    unsigned long st_dev;
+    unsigned long st_ino;
+    unsigned long st_nlink;
+    unsigned int  st_mode;
+    unsigned int  st_uid;
+    unsigned int  st_gid;
+    unsigned int  __pad0;
+    unsigned long st_rdev;
+    long          st_size;
+    long          st_blksize;
+    long          st_blocks;
+    long          st_atime;
+    long          st_atime_nsec;
+    long          st_mtime;
+    long          st_mtime_nsec;
+    long          st_ctime;
+    long          st_ctime_nsec;
+    long          __unused[3];
+};
+
+// sigaction 结构
+struct toylibc_sigaction {
+    void (*sa_handler)(int);
+    unsigned long sa_flags;
+    void (*sa_restorer)(void);
+    unsigned long sa_mask;
+};
+
 // =========================================================================
 // toylibc.h — 最小 libc 的公开接口
+// =========================================================================
 //
-// 系统调用（每个函数对应一条 syscall 指令）:
-//   read, write, _exit, brk, mmap, munmap
+// 系统调用:
+//   核心:   read, write, exit, brk, mmap, munmap
+//   文件:   open, close, lseek, stat, getcwd, chdir
+//   进程:   fork, execve, waitpid, getpid, getppid
+//   通信:   pipe, dup, dup2
+//   信号:   sigaction, kill
+//   时间:   nanosleep, gettimeofday
 //
 // 字符串/内存（纯用户态）:
-//   strlen, memcpy, memset
+//   strlen, memcpy, memset, memcmp, memmove, strcmp, strcpy
 //
 // 堆管理（基于 brk + mmap）:
 //   malloc, free, calloc, realloc
@@ -38,141 +110,88 @@ extern "C" {
 // =========================================================================
 
 // =====================================================================
-//  系统调用包装
+//  核心系统调用包装 (src/syscall.c)
 // =====================================================================
 
-/**
- * read(2) — 从 fd 读 count 字节到 buf
- * syscall 编号: 0 (__NR_read)
- * 返回: 实际读取字节数, 0=EOF, 负数=errno
- */
-long toylibc_read(int fd, void *buf, unsigned long count);
-
-/**
- * write(2) — 向 fd 写 count 字节
- * syscall 编号: 1 (__NR_write)
- * 返回: 实际写入字节数, 负数=errno
- */
-long toylibc_write(int fd, const void *buf, unsigned long count);
-
-/**
- * _exit(2) — 立即终止进程, 不调用 atexit, 不刷新 stdio
- * syscall 编号: 60 (__NR_exit_group=231 用于多线程, 这里用 60)
- */
-void toylibc_exit(int status) __attribute__((noreturn));
-
-/**
- * brk(2) — 设置进程的数据段末尾 (program break)
- *
- *   int brk(void *addr);
- *
- * syscall 编号: 12 (__NR_brk)
- * 参数:  %rdi = 新的 program break 地址
- * 返回:  0 = 成功, -1 = 失败 (errno=ENOMEM)
- *
- * 调用 brk(NULL) / brk(0) 返回当前 break（不改变它）。
- * 这是堆内存的"传统"来源——glibc malloc 对小对象用 brk, 大对象用 mmap。
- */
-void *toylibc_brk(void *addr);
-
-/**
- * mmap(2) — 创建虚拟内存映射
- *
- *   void *mmap(void *addr, size_t length, int prot, int flags,
- *              int fd, off_t offset);
- *
- * syscall 编号: 9 (__NR_mmap)
- * 参数:  %rdi=addr  %rsi=length  %rdx=prot
- *        %r10=flags  %r8=fd  %r9=offset
- *
- * Linux 内核的真实 mmap 入参在第 4 个参数用了 %r10 而非 %rcx,
- * 因为 syscall 指令本身会覆盖 rcx（保存 rip）。
- *
- * prot  (保护):
- *   PROT_NONE=0  PROT_READ=1  PROT_WRITE=2  PROT_EXEC=4
- * flags (映射方式):
- *   MAP_PRIVATE=2     MAP_ANONYMOUS=0x20     MAP_FIXED=0x10
- *   通常用 MAP_PRIVATE | MAP_ANONYMOUS 来分配匿名内存。
- */
-void *toylibc_mmap(void *addr, unsigned long length, int prot, int flags,
-                   int fd, long offset);
-
-/**
- * munmap(2) — 解除虚拟内存映射
- * syscall 编号: 11 (__NR_munmap)
- * 参数: %rdi=addr  %rsi=length
- */
-int toylibc_munmap(void *addr, unsigned long length);
+long   toylibc_read(int fd, void *buf, unsigned long count);
+long   toylibc_write(int fd, const void *buf, unsigned long count);
+void   toylibc_exit(int status) __attribute__((noreturn));
+void  *toylibc_brk(void *addr);
+void  *toylibc_mmap(void *addr, unsigned long length, int prot, int flags,
+                    int fd, long offset);
+int    toylibc_munmap(void *addr, unsigned long length);
 
 // =====================================================================
-//  字符串 / 内存（纯用户态, 无系统调用）
+//  POSIX 文件 I/O (src/fs.c)
+// =====================================================================
+
+int    toylibc_open(const char *path, int flags, int mode);
+int    toylibc_close(int fd);
+long   toylibc_lseek(int fd, long offset, int whence);
+int    toylibc_stat(const char *path, struct toylibc_stat *st);
+int    toylibc_getcwd(char *buf, unsigned long size);
+int    toylibc_chdir(const char *path);
+
+// =====================================================================
+//  POSIX 进程管理 (src/proc.c)
+// =====================================================================
+
+long   toylibc_fork(void);
+long   toylibc_execve(const char *path, char *const argv[], char *const envp[]);
+long   toylibc_waitpid(long pid, int *status, int options);
+long   toylibc_getpid(void);
+long   toylibc_getppid(void);
+
+// =====================================================================
+//  POSIX 管道/重定向 (src/pipe.c)
+// =====================================================================
+
+int    toylibc_pipe(int fds[2]);
+int    toylibc_dup(int oldfd);
+int    toylibc_dup2(int oldfd, int newfd);
+
+// =====================================================================
+//  POSIX 信号 (src/signal.c)
+// =====================================================================
+
+int    toylibc_sigaction(int signum, const struct toylibc_sigaction *act,
+                          struct toylibc_sigaction *oldact);
+int    toylibc_kill(long pid, int sig);
+
+// =====================================================================
+//  POSIX 时间 (src/time.c)
+// =====================================================================
+
+int    toylibc_nanosleep(const struct toylibc_timespec *req,
+                          struct toylibc_timespec *rem);
+int    toylibc_gettimeofday(struct toylibc_timeval *tv, void *tz);
+
+// =====================================================================
+//  字符串 / 内存（纯用户态, 无系统调用）(src/string.c)
 // =====================================================================
 
 unsigned long toylibc_strlen(const char *s);
 void *toylibc_memcpy(void *dest, const void *src, unsigned long n);
 void *toylibc_memset(void *dest, int c, unsigned long n);
-
-// 辅助: 比较 n 字节内存是否相等
-int toylibc_memcmp(const void *a, const void *b, unsigned long n);
+int   toylibc_memcmp(const void *a, const void *b, unsigned long n);
+void *toylibc_memmove(void *dest, const void *src, unsigned long n);
+int   toylibc_strcmp(const char *a, const char *b);
+char *toylibc_strcpy(char *dest, const char *src);
 
 // =====================================================================
-//  堆管理: malloc / free / calloc / realloc
+//  堆管理: malloc / free / calloc / realloc (src/heap.c)
 // =====================================================================
 
-/**
- * malloc — 分配 size 字节的堆内存
- *
- * 实现策略 (toylibc):
- *   小对象 (< 128 KB) → 从 brk 堆分配 (隐式空闲链表 + 边界标签)
- *   大对象 (≥ 128 KB) → 直接用 mmap/MAP_ANONYMOUS 分配
- *
- * 返回 16 字节对齐的指针, 失败返回 NULL。
- */
 void *toylibc_malloc(unsigned long size);
-
-/**
- * free — 释放 malloc/calloc/realloc 分配的内存
- * 传入 NULL 是安全的 (no-op)。
- */
-void toylibc_free(void *ptr);
-
-/**
- * calloc — 分配 nmemb * size 字节并清零
- */
+void  toylibc_free(void *ptr);
 void *toylibc_calloc(unsigned long nmemb, unsigned long size);
-
-/**
- * realloc — 调整已分配内存的大小
- * 若 ptr==NULL 等同 malloc; 若 size==0 等同 free。
- */
 void *toylibc_realloc(void *ptr, unsigned long size);
 
 // =====================================================================
-//  标准 I/O: printf / puts
+//  标准 I/O: printf / puts (src/stdio.c)
 // =====================================================================
 
-/**
- * printf — 格式化输出到 stdout (fd=1)
- *
- * 支持的格式说明符:
- *   %d  %i  — 有符号十进制整数
- *   %u      — 无符号十进制整数
- *   %x      — 十六进制 (小写)
- *   %s      — 字符串
- *   %c      — 单个字符
- *   %p      — 指针地址 (十六进制)
- *   %%      — 字面百分号
- *
- * 不支持: 宽度、精度、长度修饰符、浮点数
- *
- * 返回: 写入的字符总数 (不含 '\0')
- */
 int toylibc_printf(const char *fmt, ...);
-
-/**
- * puts — 输出字符串 + 换行到 stdout (fd=1)
- * 返回: 写入的字符数 (含换行), 出错返回 -1
- */
 int toylibc_puts(const char *s);
 
 #ifdef __cplusplus

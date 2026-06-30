@@ -6,9 +6,14 @@
 # 文件映射:
 #   src/start.S    — _start 入口 (汇编, 设 argc/argv → call main → exit)
 #   src/syscall.c  — read, write, brk, mmap, munmap, exit (inline asm → syscall)
-#   src/string.c   — strlen, memcpy, memset, memcmp (纯用户态)
+#   src/string.c   — strlen, memcpy, memset, memcmp, memmove, strcmp, strcpy
 #   src/heap.c     — malloc, free, calloc, realloc (brk + mmap 双层分配)
 #   src/stdio.c    — printf, puts (va_list 格式解析 + write)
+#   src/fs.c       — open, close, lseek, stat, getcwd, chdir (POSIX 文件 I/O)
+#   src/proc.c     — fork, execve, waitpid, getpid, getppid (POSIX 进程管理)
+#   src/pipe.c     — pipe, dup, dup2 (POSIX 管道/重定向)
+#   src/signal.c   — sigaction, kill (POSIX 信号)
+#   src/time.c     — nanosleep, gettimeofday (POSIX 时间)
 #
 # 目标:
 #   make          → libtoy.a + 测试程序
@@ -29,7 +34,12 @@ TEST_BIN  := $(BUILD_DIR)/test
 LIB_OBJS := $(BUILD_DIR)/syscall.o \
             $(BUILD_DIR)/string.o  \
             $(BUILD_DIR)/heap.o    \
-            $(BUILD_DIR)/stdio.o
+            $(BUILD_DIR)/stdio.o   \
+            $(BUILD_DIR)/fs.o      \
+            $(BUILD_DIR)/proc.o    \
+            $(BUILD_DIR)/pipe.o    \
+            $(BUILD_DIR)/signal.o  \
+            $(BUILD_DIR)/time.o
 
 .PHONY: all clean test examples
 
