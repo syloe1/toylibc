@@ -88,7 +88,13 @@ examples: $(LIB)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -I include $(CFLAGS) -nostartfiles -nodefaultlibs -static \
 	      $(BUILD_DIR)/start.o examples/hello.c $(LIB) -o $(BUILD_DIR)/hello
-	@echo "  → build/hello (编译完成)"
+	@echo "  → build/hello"
+	$(CC) -I include $(CFLAGS) -nostartfiles -nodefaultlibs -static \
+	      $(BUILD_DIR)/start.o examples/posix-demo.c $(LIB) -o $(BUILD_DIR)/posix-demo
+	@echo "  → build/posix-demo"
+	$(CC) -I include $(CFLAGS) -nostartfiles -nodefaultlibs -static \
+	      $(BUILD_DIR)/start.o examples/shell.c $(LIB) -o $(BUILD_DIR)/toysh
+	@echo "  → build/toysh"
 
 clean:
 	rm -rf $(BUILD_DIR)
