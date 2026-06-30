@@ -141,12 +141,20 @@ make clean    # 清理产物
 ★★★★★ 汇编          — 已掌握（start.S + 内联汇编 syscall）
 ★★★★★ syscall       — 已掌握（6 个系统调用 + strace 验证）
 ★★★★☆ libc          — 已完成（自举运行时库，13 个函数）
-☆☆☆☆☆ ELF           ← 进行中（learn-elf.md）
-☆☆☆☆☆ Loader
-☆☆☆☆☆ 动态链接
+★★★★★ ELF           — 已完成（learn-elf.md）
+★★★★★ Loader        — 已完成（learn-loader.md）
+☆☆☆☆☆ 动态链接       ← 进行中（learn-dynlink.md）
 ☆☆☆☆☆ POSIX
 ☆☆☆☆☆ Shell
 ```
+
+### 学习文档
+
+| 文档 | 内容 |
+|---|---|
+| [learn.md](learn.md) | libc 五模块源码学习路线 |
+| [learn-elf.md](learn-elf.md) | ELF 文件格式动手教程 |
+| [learn-loader.md](learn-loader.md) | 内核 execve 加载流程 |
 
 ## 示例程序
 
