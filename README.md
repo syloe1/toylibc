@@ -111,6 +111,50 @@ make clean    # 清理产物
 | `brk` | 12 |
 | `exit` | 60 |
 
+## 项目文件
+
+```
+.
+├── src/
+│   ├── start.S          # _start 入口
+│   ├── syscall.c         # 系统调用包装（内联汇编详解注释）
+│   ├── string.c          # strlen / memcpy / memset / memcmp
+│   ├── heap.c            # malloc / free / calloc / realloc
+│   └── stdio.c           # printf / puts
+├── include/
+│   └── toylibc.h         # 公开接口（13 个函数）
+├── test/
+│   └── test.c            # 31 项功能测试
+├── examples/
+│   └── hello.c           # 使用 toylibc 的最小示例
+├── learn.md              # libc 五模块学习路线
+├── learn-elf.md          # ELF 文件格式动手教程
+├── Makefile              # 构建系统
+├── README.md             # 项目说明
+└── .gitignore
+```
+
+## 学习路线
+
+```
+★★★★★ CPU           — 已掌握
+★★★★★ 汇编          — 已掌握（start.S + 内联汇编 syscall）
+★★★★★ syscall       — 已掌握（6 个系统调用 + strace 验证）
+★★★★☆ libc          — 已完成（自举运行时库，13 个函数）
+☆☆☆☆☆ ELF           ← 进行中（learn-elf.md）
+☆☆☆☆☆ Loader
+☆☆☆☆☆ 动态链接
+☆☆☆☆☆ POSIX
+☆☆☆☆☆ Shell
+```
+
+## 示例程序
+
+```bash
+make examples        # 编译 examples/hello.c → build/hello
+./build/hello        # 运行，ldd 显示 "not a dynamic executable"
+```
+
 ## 许可证
 
 MIT
